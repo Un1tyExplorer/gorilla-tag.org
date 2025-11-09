@@ -92,21 +92,12 @@
       }
     }
 
-    .snowflake {
+    canvas {
       position: fixed;
-      top: -10px;
+      top: 0;
+      left: 0;
+      pointer-events: none;
       z-index: 1;
-      user-select: none;
-      cursor: default;
-      background: radial-gradient(circle, #00a2ff, transparent);
-      box-shadow: 0 0 10px #00a2ff;
-      border-radius: 50%;
-      opacity: 0.9;
-      display: none;
-    }
-
-    .snowflake.visible {
-      display: block;
     }
 
     .music-btn {
@@ -172,11 +163,16 @@
       object-fit: cover;
       box-shadow: 0 0 40px rgba(0, 162, 255, 0.3);
       transition: all 0.5s ease;
+      animation: pendulum 3s ease-in-out infinite;
     }
 
-    .profile-pic:hover {
-      transform: translateY(-10px) rotate(2deg);
-      box-shadow: 0 0 60px rgba(0, 162, 255, 0.6);
+    @keyframes pendulum {
+      0%, 100% {
+        transform: rotate(-3deg);
+      }
+      50% {
+        transform: rotate(3deg);
+      }
     }
 
     .name {
@@ -187,6 +183,16 @@
       letter-spacing: 2px;
       margin-bottom: 10px;
       text-transform: uppercase;
+      animation: nameGlow 1.5s ease-in-out infinite alternate;
+    }
+
+    @keyframes nameGlow {
+      from {
+        text-shadow: 0 0 5px #00a2ff, 0 0 10px #00a2ff;
+      }
+      to {
+        text-shadow: 0 0 10px #00a2ff, 0 0 20px #00a2ff, 0 0 30px #00a2ff;
+      }
     }
 
     .tagline {
@@ -379,7 +385,7 @@
     </div>
   </div>
 
-  <div id="snow-container"></div>
+  <canvas id="particleCanvas"></canvas>
 
   <button class="music-btn" id="musicBtn" title="Toggle Music">
     <i class="fas fa-volume-up"></i>
@@ -455,65 +461,150 @@
     const splashScreen = document.getElementById('splashScreen');
     const bgMusic = document.getElementById('bgMusic');
     const musicBtn = document.getElementById('musicBtn');
-    const snowContainer = document.getElementById('snow-container');
-    const typewriterName = document.getElementById('typewriterName');
+    const canvas = document.getElementById('particleCanvas');
+    const ctx = canvas.getContext('2d');
+    const snowParticles = [];
+    const mouseParticles = [];
+    let particlesActive = false;
     let isMuted = false;
-    let snowflakesVisible = false;
 
-    bgMusic.volume = 0.3;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes fall {
-        to {
-          transform: translateY(100vh) translateX(100px);
-          opacity: 0;
+    class SnowParticle {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = Math.random() * 3 + 1;
+        this.speedX = Math.random() * 1 - 0.5;
+        this.speedY = Math.random() * 1 + 0.5;
+      }
+
+      update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+
+        if (this.y > canvas.height) {
+          this.y = 0;
+          this.x = Math.random() * canvas.width;
         }
       }
-      .snowflake {
-        animation: fall linear forwards;
+
+      draw() {
+        ctx.fillStyle = 'rgba(0, 162, 255, 0.8)';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00a2ff';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
       }
-    `;
-    document.head.appendChild(style);
+    }
+
+    class MouseParticle {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = Math.random() * 3 + 1;
+        this.speedX = Math.random() * 3 - 1.5;
+        this.speedY = Math.random() * 3 - 1.5;
+        this.life = 100;
+      }
+
+      update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        if (this.size > 0.2) this.size -= 0.1;
+        this.life--;
+      }
+
+      draw() {
+        ctx.fillStyle = `rgba(0, 162, 255, ${this.life / 100})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function createSnowParticles() {
+      for (let i = 0; i < 100; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        snowParticles.push(new SnowParticle(x, y));
+      }
+    }
+
+    function createMouseParticles(e) {
+      if (!particlesActive) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      for (let i = 0; i < 5; i++) {
+        mouseParticles.push(new MouseParticle(x, y));
+      }
+    }
+
+    function animateParticles() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      for (let i = 0; i < snowParticles.length; i++) {
+        snowParticles[i].update();
+        snowParticles[i].draw();
+      }
+
+      for (let i = 0; i < mouseParticles.length; i++) {
+        mouseParticles[i].update();
+        mouseParticles[i].draw();
+        if (mouseParticles[i].life <= 0) {
+          mouseParticles.splice(i, 1);
+          i--;
+        }
+      }
+
+      requestAnimationFrame(animateParticles);
+    }
+
+    window.addEventListener('mousemove', createMouseParticles);
+    window.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      createMouseParticles({
+        clientX: touch.clientX,
+        clientY: touch.clientY
+      });
+    }, { passive: false });
+
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      snowParticles.length = 0;
+      if (particlesActive) {
+        createSnowParticles();
+      }
+    });
+
+    bgMusic.volume = 0.3;
 
     splashScreen.addEventListener('click', () => {
       bgMusic.play();
       splashScreen.classList.add('hidden');
       
       musicBtn.classList.add('visible');
-      snowflakesVisible = true;
+      particlesActive = true;
+      createSnowParticles();
+      animateParticles();
       typewriter();
     });
 
     musicBtn.addEventListener('click', () => {
-      if (isMuted) {
+      if (bgMusic.paused) {
         bgMusic.play();
         musicBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
-        isMuted = false;
       } else {
         bgMusic.pause();
         musicBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
-        isMuted = true;
       }
     });
-
-    function createSnowflake() {
-      if (!snowflakesVisible) return;
-
-      const snowflake = document.createElement('div');
-      snowflake.classList.add('snowflake', 'visible');
-      snowflake.style.left = Math.random() * window.innerWidth + 'px';
-      snowflake.style.width = Math.random() * 8 + 5 + 'px';
-      snowflake.style.height = snowflake.style.width;
-      snowflake.style.animationDuration = Math.random() * 3 + 5.5 + 's';
-      snowflake.style.opacity = Math.random() * 0.4 + 0.6;
-      
-      snowContainer.appendChild(snowflake);
-      
-      setTimeout(() => snowflake.remove(), 8000);
-    }
-
-    setInterval(createSnowflake, 30);
 
     const texts = ['@UN1TYVR ON DISCORD', 'SUBSCRIBE TO ME!', 'JOIN MY DISCORD!', 'FOLLOW MY TIKTOK!'];
     let textIndex = 0;
@@ -526,8 +617,8 @@
         ? currentText.substring(0, charIndex - 1)
         : currentText.substring(0, charIndex + 1);
       
-      typewriterName.textContent = displayText;
-      typewriterName.innerHTML = displayText + '<span class="typewriter-cursor">|</span>';
+      document.getElementById('typewriterName').textContent = displayText;
+      document.getElementById('typewriterName').innerHTML = displayText + '<span class="typewriter-cursor">|</span>';
 
       if (!isDeleting && charIndex < currentText.length) {
         charIndex++;
